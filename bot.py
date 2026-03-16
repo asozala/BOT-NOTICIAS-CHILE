@@ -1,6 +1,6 @@
 """
 Bot de Monitoreo de Noticias Chile
-Genera un PDF completo y lo envía por WhatsApp via Twilio.
+Genera un PDF y lo envia por WhatsApp via Twilio.
 """
 
 import anthropic
@@ -11,8 +11,6 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from fpdf import FPDF
 
-# ─── Configuración ────────────────────────────────────────────────────────────
-
 ANTHROPIC_API_KEY  = os.environ["ANTHROPIC_API_KEY"]
 TWILIO_ACCOUNT_SID = os.environ["TWILIO_ACCOUNT_SID"]
 TWILIO_AUTH_TOKEN  = os.environ["TWILIO_AUTH_TOKEN"]
@@ -21,268 +19,246 @@ WHATSAPP_TO        = os.environ["WHATSAPP_TO"]
 
 CHILE_TZ = ZoneInfo("America/Santiago")
 
-# ─── Prompt del sistema ───────────────────────────────────────────────────────
+SYSTEM_PROMPT = """Eres un agente de monitoreo de noticias de Chile. Genera reportes diarios
+completos, precisos y verificables sobre politica, economia y sociedad chilena.
 
-SYSTEM_PROMPT = """Eres un agente automatizado de monitoreo y análisis de noticias sobre Chile.
-Generas reportes diarios completos, precisos y verificables sobre política, economía y sociedad.
+FOCO:
+1. Gobierno de Kast: declaraciones, anuncios, politicas, gabinete, ministros.
+2. Politica nacional: Congreso, proyectos de ley, partidos.
+3. Economia: dolar, cobre, inflacion, Banco Central, mineria.
+4. Internacional con impacto en Chile.
 
-FOCO PRINCIPAL:
-1. Gobierno de José Antonio Kast: declaraciones, anuncios, políticas, gabinete, ministros, Congreso.
-2. Política nacional: debates legislativos, proyectos de ley, partidos, elecciones.
-3. Economía chilena: crecimiento, inflación, Banco Central, minería (cobre/litio), inversión, mercados.
-4. Internacional con impacto en Chile: EEUU, China, commodities, geopolítica regional.
+FUENTES: El Mercurio, La Tercera, Diario Financiero, Emol, El Mostrador,
+BioBioChile, Cooperativa, T13, CNN Chile, Ex-Ante.
 
-FUENTES: El Mercurio, La Tercera, Diario Financiero, Emol, El Mostrador, BioBioChile,
-Cooperativa, T13, CNN Chile, Ex-Ante, Ciper Chile, La Segunda, Radio Agricultura.
+REGLAS: No inventar noticias. Solo hechos verificables. Estilo neutral y analitico.
+Sin limite de extension: incluye TODAS las noticias relevantes.
 
-REGLAS CRÍTICAS:
-- Nunca inventar noticias, citas ni fuentes.
-- Solo reportar información verificable.
-- Estilo: claro, profesional, neutral, analítico.
-- Sin límite de extensión: incluye TODAS las noticias relevantes del período.
-
-ESTRUCTURA OBLIGATORIA:
+ESTRUCTURA:
 
 REPORTE DIARIO - MONITOREO NOTICIAS CHILE
-Fecha: [fecha completa]
+Fecha: [fecha]
 Hora: [hora] hrs
 
-=== RESUMEN EJECUTIVO ===
-[8-12 líneas explicando los eventos más importantes]
+RESUMEN EJECUTIVO
+[8-12 lineas con los eventos mas importantes]
 
-=== GOBIERNO Y POLÍTICA NACIONAL ===
+GOBIERNO Y POLITICA NACIONAL
 
-[Para cada noticia:]
->> TITULAR: [título]
-Prioridad: ALTA / MEDIA / CONTEXTO
-[3-5 párrafos con: qué ocurrió, quién declaró, contexto, relevancia, consecuencias]
+NOTICIA: [titular]
+Prioridad: ALTA
+[3-5 parrafos: que ocurrio, quien declaro, contexto, relevancia, consecuencias]
 Fuentes: [medios]
----
 
-=== ECONOMÍA Y NEGOCIOS ===
+NOTICIA: [titular]
+Prioridad: MEDIA
+[descripcion]
+Fuentes: [medios]
 
-[Mismo formato]
+ECONOMIA Y NEGOCIOS
 
-=== INDICADORES DEL DÍA ===
-Dólar: $[valor] | Cobre: $[valor] | Petróleo Brent: $[valor] | IPSA: [valor]
-[Análisis breve]
+NOTICIA: [titular]
+[descripcion]
+Fuentes: [medios]
 
-=== NOTICIAS INTERNACIONALES ===
+INDICADORES DEL DIA
+Dolar: $[valor] pesos
+Cobre: $[valor] la libra
+Petroleo Brent: $[valor] USD
+IPSA: [valor]
+[comentario breve del mercado]
 
-[Mismo formato]
+NOTICIAS INTERNACIONALES
 
-=== FUENTES CONSULTADAS ===
-[Lista de todos los medios y artículos usados]
+NOTICIA: [titular]
+[descripcion e impacto en Chile]
+Fuentes: [medios]
+
+FUENTES CONSULTADAS
+[lista de todos los articulos usados]
 """
 
 
-def get_periodo() -> str:
+def get_periodo():
     now = datetime.now(CHILE_TZ)
-    return "MAÑANA (08:00)" if now.hour < 13 else "TARDE (17:00)"
+    return "MANANA (08:00)" if now.hour < 13 else "TARDE (17:00)"
 
 
-def generate_report() -> str:
-    """Llama a Claude con web_search para generar el reporte completo."""
+def generate_report():
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-    now     = datetime.now(CHILE_TZ)
-    fecha   = now.strftime("%A %d de %B de %Y")
-    hora    = now.strftime("%H:%M")
-    periodo = get_periodo()
-
-    user_prompt = f"""Genera el REPORTE DE {periodo} del {fecha} a las {hora} hrs (Santiago de Chile).
-
-Usa la herramienta de búsqueda web para obtener TODAS las noticias relevantes de hoy.
-
-Busca activamente:
-- Noticias del gobierno Kast y política chilena hoy
-- Economía chilena: dólar, cobre, mercados hoy
-- Congreso chileno: votaciones y proyectos de ley hoy
-- Noticias internacionales que impacten a Chile hoy
-
-NO te limites en extensión. Incluye todas las noticias relevantes que encuentres.
-Sigue exactamente la estructura definida."""
+    now    = datetime.now(CHILE_TZ)
+    fecha  = now.strftime("%A %d de %B de %Y")
+    hora   = now.strftime("%H:%M")
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=8000,
         system=SYSTEM_PROMPT,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": user_prompt}],
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Genera el REPORTE DE {get_periodo()} del {fecha} a las {hora} hrs.\n\n"
+                "Usa busqueda web para obtener TODAS las noticias relevantes de hoy en Chile.\n"
+                "Busca: noticias gobierno Kast hoy, economia Chile hoy, "
+                "politica chilena hoy, noticias internacionales que afecten a Chile hoy.\n"
+                "No te limites en extension. Incluye todo lo relevante."
+            )
+        }],
     )
 
-    report_text = ""
+    text = ""
     for block in response.content:
         if block.type == "text":
-            report_text += block.text
+            text += block.text
+    return text.strip()
 
-    return report_text.strip()
 
-
-def sanitize(text: str) -> str:
-    """Limpia caracteres que fpdf no puede renderizar."""
-    replacements = {
-        "\u2019": "'", "\u2018": "'", "\u201c": '"', "\u201d": '"',
-        "\u2013": "-", "\u2014": "-", "\u2026": "...", "\u00b7": "*",
-        "\u25b8": ">", "\u25ba": ">", "\u2022": "*", "\u00bb": ">>",
-        "\u00ab": "<<", "\u2192": "->", "\u2190": "<-",
+def clean(text):
+    """Convierte el texto a latin-1 para que fpdf lo pueda renderizar."""
+    chars = {
+        "\u2019": "'",  "\u2018": "'",  "\u201c": '"',  "\u201d": '"',
+        "\u2013": "-",  "\u2014": "-",  "\u2026": "...","\u00b7": "-",
+        "\u25b8": ">",  "\u2022": "*",  "\u00bb": ">>", "\u2192": "->",
+        "\u00b0": " grados", "\u00e9": "e", "\u00f3": "o", "\u00ed": "i",
+        "\u00fa": "u",  "\u00e1": "a",  "\u00e3": "a",  "\u00f1": "n",
+        "\u00c1": "A",  "\u00c9": "E",  "\u00cd": "I",  "\u00d3": "O",
+        "\u00da": "U",  "\u00d1": "N",
     }
-    for orig, repl in replacements.items():
+    for orig, repl in chars.items():
         text = text.replace(orig, repl)
-    # Elimina cualquier caracter no-latin1
     return text.encode("latin-1", errors="replace").decode("latin-1")
 
 
-def create_pdf(report_text: str, filepath: str) -> None:
-    """Genera un PDF limpio y robusto con el reporte."""
-
-    pdf = FPDF(orientation="P", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_margins(15, 15, 15)  # left, top, right — márgenes seguros
+def create_pdf(report_text, filepath):
+    """Genera un PDF simple y robusto."""
+    pdf = FPDF(format="A4")
+    pdf.set_margins(20, 20, 20)
+    pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
 
     now = datetime.now(CHILE_TZ)
+    page_w = 170  # ancho util = 210 - 20 - 20
 
-    # ── Portada / encabezado ──────────────────────────────────────────────────
-    pdf.set_fill_color(180, 0, 0)
-    pdf.rect(0, 0, 210, 22, "F")
-
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_xy(15, 5)
-    pdf.cell(130, 8, "REPORTE NOTICIAS CHILE", ln=0)
+    # ── Encabezado ─────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(180, 0, 0)
+    pdf.cell(page_w, 10, "REPORTE NOTICIAS CHILE", ln=True, align="C")
 
     pdf.set_font("Helvetica", "", 9)
-    pdf.set_xy(15, 14)
-    pdf.cell(180, 6, now.strftime("Generado el %d/%m/%Y a las %H:%M hrs  |  Santiago de Chile"), ln=0)
+    pdf.set_text_color(100, 100, 100)
+    fecha_str = clean(now.strftime("Generado el %d/%m/%Y a las %H:%M hrs  |  Santiago de Chile"))
+    pdf.cell(page_w, 6, fecha_str, ln=True, align="C")
 
-    pdf.set_text_color(30, 30, 30)
-    pdf.set_y(28)
+    pdf.set_draw_color(180, 0, 0)
+    pdf.set_line_width(0.5)
+    pdf.line(20, pdf.get_y() + 2, 190, pdf.get_y() + 2)
+    pdf.ln(6)
 
-    # ── Cuerpo del reporte ────────────────────────────────────────────────────
-    lines = report_text.split("\n")
-
-    for raw_line in lines:
-        line = sanitize(raw_line)
-        stripped = line.strip()
-
-        if not stripped:
+    # ── Cuerpo ─────────────────────────────────────────────────────
+    for raw in report_text.split("\n"):
+        line = clean(raw.strip())
+        if not line:
             pdf.ln(2)
             continue
 
-        # Título principal
-        if stripped.startswith("REPORTE DIARIO") or stripped.startswith("REPORTE DE"):
-            pdf.set_font("Helvetica", "B", 13)
+        # Titulo principal del reporte
+        if line.startswith("REPORTE DIARIO") or line.startswith("REPORTE DE"):
+            pdf.set_font("Helvetica", "B", 12)
             pdf.set_text_color(180, 0, 0)
-            pdf.multi_cell(0, 7, stripped)
-            pdf.ln(1)
+            pdf.multi_cell(page_w, 7, line)
 
-        # Fecha / Hora
-        elif stripped.startswith("Fecha:") or stripped.startswith("Hora:"):
+        # Fecha/Hora
+        elif line.startswith("Fecha:") or line.startswith("Hora:"):
             pdf.set_font("Helvetica", "", 9)
             pdf.set_text_color(100, 100, 100)
-            pdf.multi_cell(0, 5, stripped)
+            pdf.multi_cell(page_w, 5, line)
 
-        # Encabezados de sección === ... ===
-        elif stripped.startswith("===") and stripped.endswith("==="):
-            titulo_sec = stripped.replace("=", "").strip()
-            pdf.ln(5)
-            pdf.set_fill_color(240, 240, 240)
-            pdf.set_draw_color(180, 0, 0)
-            pdf.set_font("Helvetica", "B", 10)
-            pdf.set_text_color(180, 0, 0)
-            # Rectángulo de fondo
-            y_pos = pdf.get_y()
-            pdf.set_fill_color(240, 240, 240)
-            pdf.rect(15, y_pos, 180, 8, "F")
+        # Encabezados de seccion (TODO MAYUSCULAS, mas de 4 chars)
+        elif (line.isupper() and len(line) > 4
+              and not line.startswith("NOTICIA")
+              and not line.startswith("FUENTE")
+              and not line.startswith("PRIORIDAD")):
+            pdf.ln(4)
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.set_text_color(255, 255, 255)
             pdf.set_fill_color(180, 0, 0)
-            pdf.rect(15, y_pos, 3, 8, "F")
-            pdf.set_xy(20, y_pos)
-            pdf.cell(170, 8, titulo_sec, ln=1)
+            pdf.cell(page_w, 8, "  " + line, ln=True, fill=True)
             pdf.ln(2)
+            pdf.set_text_color(30, 30, 30)
 
-        # Titular de noticia >> TITULAR:
-        elif stripped.startswith(">> TITULAR:") or stripped.startswith(">>TITULAR:"):
-            titulo = stripped.replace(">> TITULAR:", "").replace(">>TITULAR:", "").strip()
+        # Titular de noticia
+        elif line.startswith("NOTICIA:"):
+            titulo = line.replace("NOTICIA:", "").strip()
             pdf.ln(3)
             pdf.set_font("Helvetica", "B", 10)
             pdf.set_text_color(30, 30, 30)
-            pdf.multi_cell(0, 6, titulo)
-            pdf.ln(1)
+            pdf.multi_cell(page_w, 6, titulo)
 
         # Prioridad
-        elif stripped.startswith("Prioridad:"):
-            if "ALTA" in stripped.upper():
+        elif line.startswith("Prioridad:"):
+            if "ALTA" in line.upper():
                 pdf.set_text_color(180, 0, 0)
-                label = "| ALTA RELEVANCIA"
-            elif "MEDIA" in stripped.upper():
+                label = "[ ALTA RELEVANCIA ]"
+            elif "MEDIA" in line.upper():
                 pdf.set_text_color(200, 100, 0)
-                label = "| RELEVANCIA MEDIA"
+                label = "[ RELEVANCIA MEDIA ]"
             else:
                 pdf.set_text_color(60, 130, 60)
-                label = "| CONTEXTO"
+                label = "[ CONTEXTO ]"
             pdf.set_font("Helvetica", "B", 8)
-            pdf.cell(0, 5, label, ln=1)
+            pdf.cell(page_w, 5, label, ln=True)
             pdf.set_text_color(30, 30, 30)
             pdf.ln(1)
 
         # Fuentes
-        elif stripped.startswith("Fuentes:") or stripped.startswith("Fuente:"):
+        elif line.startswith("Fuentes:") or line.startswith("Fuente:"):
             pdf.set_font("Helvetica", "I", 8)
-            pdf.set_text_color(100, 100, 100)
-            pdf.multi_cell(0, 5, stripped)
+            pdf.set_text_color(120, 120, 120)
+            pdf.multi_cell(page_w, 5, line)
             pdf.set_text_color(30, 30, 30)
-
-        # Separador ---
-        elif stripped == "---":
-            pdf.ln(2)
-            pdf.set_draw_color(200, 200, 200)
-            pdf.line(15, pdf.get_y(), 195, pdf.get_y())
-            pdf.ln(3)
+            pdf.ln(1)
 
         # Indicadores de mercado
-        elif stripped.startswith("Dólar:") or stripped.startswith("Dollar:"):
-            pdf.set_fill_color(245, 245, 245)
+        elif any(k in line for k in ["Dolar:", "Cobre:", "Petroleo", "IPSA:"]):
             pdf.set_font("Helvetica", "B", 9)
             pdf.set_text_color(30, 30, 30)
-            pdf.multi_cell(0, 6, stripped, fill=True)
+            pdf.set_fill_color(245, 245, 245)
+            pdf.multi_cell(page_w, 6, line, fill=True)
 
         # Texto normal
         else:
             pdf.set_font("Helvetica", "", 9)
             pdf.set_text_color(30, 30, 30)
-            pdf.multi_cell(0, 5, stripped)
+            pdf.multi_cell(page_w, 5, line)
 
-    # ── Pie de página final ───────────────────────────────────────────────────
-    pdf.ln(8)
+    # ── Pie ────────────────────────────────────────────────────────
+    pdf.ln(6)
     pdf.set_draw_color(180, 0, 0)
-    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
     pdf.ln(3)
     pdf.set_font("Helvetica", "I", 8)
-    pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 5, "Generado automaticamente por Bot Noticias Chile  |  Solo para uso interno", align="C")
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(page_w, 5, "Generado por Bot Noticias Chile  |  Solo uso interno", align="C")
 
     pdf.output(filepath)
 
 
-def upload_pdf(filepath: str) -> str:
-    """Sube el PDF a transfer.sh y retorna la URL pública."""
+def upload_pdf(filepath):
     filename = os.path.basename(filepath)
     with open(filepath, "rb") as f:
-        response = requests.put(
+        r = requests.put(
             f"https://transfer.sh/{filename}",
             data=f,
             headers={"Max-Days": "1"},
             timeout=60,
         )
-    response.raise_for_status()
-    return response.text.strip()
+    r.raise_for_status()
+    return r.text.strip()
 
 
-def send_whatsapp_pdf(pdf_url: str, fecha: str) -> None:
-    """Envía el PDF por WhatsApp usando Twilio."""
+def send_whatsapp(pdf_url, fecha):
     from twilio.rest import Client
-
     client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     client.messages.create(
         from_=TWILIO_FROM,
@@ -290,47 +266,46 @@ def send_whatsapp_pdf(pdf_url: str, fecha: str) -> None:
         media_url=[pdf_url],
         body=f"Reporte Noticias Chile\n{fecha}\n\nReporte completo adjunto. Link valido 24 hrs.",
     )
-    print(f"  Enviado: {pdf_url}")
 
 
 def main():
-    print("=" * 60)
-    print("  BOT NOTICIAS CHILE")
     now = datetime.now(CHILE_TZ)
+    print("=" * 55)
+    print("  BOT NOTICIAS CHILE")
     print(f"  {now.strftime('%d/%m/%Y %H:%M')} hrs (Santiago)")
-    print("=" * 60)
+    print("=" * 55)
 
-    fecha_display = now.strftime("%A %d de %B de %Y, %H:%M hrs")
+    fecha_display = clean(now.strftime("%A %d de %B de %Y, %H:%M hrs"))
 
-    print("\n[1/3] Generando reporte con Claude + busqueda web...")
+    print("\n[1/3] Generando reporte...")
     try:
         report = generate_report()
-        print(f"  OK - Reporte generado ({len(report)} caracteres)")
+        print(f"  OK ({len(report)} caracteres)")
     except Exception as e:
-        print(f"  ERROR generando reporte: {e}")
+        print(f"  ERROR: {e}")
         sys.exit(1)
 
     print("\n[2/3] Creando PDF...")
-    pdf_path = f"/tmp/reporte_chile_{now.strftime('%Y%m%d_%H%M')}.pdf"
+    pdf_path = f"/tmp/reporte_{now.strftime('%Y%m%d_%H%M')}.pdf"
     try:
         create_pdf(report, pdf_path)
-        size_kb = os.path.getsize(pdf_path) // 1024
-        print(f"  OK - PDF creado ({size_kb} KB)")
+        kb = os.path.getsize(pdf_path) // 1024
+        print(f"  OK ({kb} KB)")
     except Exception as e:
-        print(f"  ERROR creando PDF: {e}")
+        print(f"  ERROR: {e}")
         sys.exit(1)
 
-    print("\n[3/3] Subiendo PDF y enviando por WhatsApp...")
+    print("\n[3/3] Subiendo y enviando por WhatsApp...")
     try:
-        pdf_url = upload_pdf(pdf_path)
-        print(f"  OK - PDF subido: {pdf_url}")
-        send_whatsapp_pdf(pdf_url, fecha_display)
+        url = upload_pdf(pdf_path)
+        print(f"  URL: {url}")
+        send_whatsapp(url, fecha_display)
         print("  OK - WhatsApp enviado")
     except Exception as e:
-        print(f"  ERROR enviando: {e}")
+        print(f"  ERROR: {e}")
         sys.exit(1)
 
-    print("\nBot finalizado exitosamente")
+    print("\nBot finalizado correctamente.")
 
 
 if __name__ == "__main__":
