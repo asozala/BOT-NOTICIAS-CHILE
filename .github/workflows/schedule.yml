@@ -1,0 +1,57 @@
+name: 📰 Bot Noticias Chile
+
+on:
+  schedule:
+    - cron: "0 11 * * *"
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: "Motivo de ejecución manual (opcional)"
+        required: false
+        default: "Prueba manual"
+
+jobs:
+  generar-y-enviar-reporte:
+    name: Generar y enviar reporte
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 📦 Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: 🤖 Ejecutar bot de noticias
+        env:
+          ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          TWILIO_ACCOUNT_SID:     ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:      ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM:   ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          WHATSAPP_TO:            ${{ secrets.WHATSAPP_TO }}
+        run: python bot.py
+
+      - name: ❌ Notificar fallo
+        if: failure()
+        run: echo "El bot falló. Revisa los logs para ver el error."
+```
+
+---
+
+**3️⃣ Verifica que se ve bien**
+
+El editor debería verse así, empezando desde la línea 1:
+```
+1   name: 📰 Bot Noticias Chile
+2   
+3   on:
+4     schedule:
+...
