@@ -86,9 +86,9 @@ def get_periodo():
 
 def generate_report():
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    now    = datetime.now(CHILE_TZ)
-    fecha  = now.strftime("%A %d de %B de %Y")
-    hora   = now.strftime("%H:%M")
+    now   = datetime.now(CHILE_TZ)
+    fecha = now.strftime("%A %d de %B de %Y")
+    hora  = now.strftime("%H:%M")
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -120,8 +120,9 @@ def clean(text):
         "\u2019": "'",  "\u2018": "'",  "\u201c": '"',  "\u201d": '"',
         "\u2013": "-",  "\u2014": "-",  "\u2026": "...","\u00b7": "-",
         "\u25b8": ">",  "\u2022": "*",  "\u00bb": ">>", "\u2192": "->",
-        "\u00b0": " grados", "\u00e9": "e", "\u00f3": "o", "\u00ed": "i",
-        "\u00fa": "u",  "\u00e1": "a",  "\u00e3": "a",  "\u00f1": "n",
+        "\u00b0": " grados",
+        "\u00e9": "e",  "\u00f3": "o",  "\u00ed": "i",  "\u00fa": "u",
+        "\u00e1": "a",  "\u00e3": "a",  "\u00f1": "n",
         "\u00c1": "A",  "\u00c9": "E",  "\u00cd": "I",  "\u00d3": "O",
         "\u00da": "U",  "\u00d1": "N",
     }
@@ -137,32 +138,32 @@ def create_pdf(report_text, filepath):
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
 
-    now = datetime.now(CHILE_TZ)
-    page_w = 170  # ancho util = 210 - 20 - 20
+    now    = datetime.now(CHILE_TZ)
+    page_w = 170  # ancho util: 210 - 20 - 20
 
-    # ── Encabezado ─────────────────────────────────────────────────
+    # ── Encabezado ──────────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(180, 0, 0)
-    pdf.cell(page_w, 10, "REPORTE NOTICIAS CHILE", ln=True, align="C")
+    pdf.cell(page_w, 10, "REPORTE NOTICIAS CHILE", new_x="LMARGIN", new_y="NEXT", align="C")
 
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(100, 100, 100)
     fecha_str = clean(now.strftime("Generado el %d/%m/%Y a las %H:%M hrs  |  Santiago de Chile"))
-    pdf.cell(page_w, 6, fecha_str, ln=True, align="C")
+    pdf.cell(page_w, 6, fecha_str, new_x="LMARGIN", new_y="NEXT", align="C")
 
     pdf.set_draw_color(180, 0, 0)
     pdf.set_line_width(0.5)
     pdf.line(20, pdf.get_y() + 2, 190, pdf.get_y() + 2)
     pdf.ln(6)
 
-    # ── Cuerpo ─────────────────────────────────────────────────────
+    # ── Cuerpo ──────────────────────────────────────────────────────
     for raw in report_text.split("\n"):
         line = clean(raw.strip())
         if not line:
             pdf.ln(2)
             continue
 
-        # Titulo principal del reporte
+        # Titulo principal
         if line.startswith("REPORTE DIARIO") or line.startswith("REPORTE DE"):
             pdf.set_font("Helvetica", "B", 12)
             pdf.set_text_color(180, 0, 0)
@@ -174,7 +175,7 @@ def create_pdf(report_text, filepath):
             pdf.set_text_color(100, 100, 100)
             pdf.multi_cell(page_w, 5, line)
 
-        # Encabezados de seccion (TODO MAYUSCULAS, mas de 4 chars)
+        # Encabezados de seccion (TODO MAYUSCULAS)
         elif (line.isupper() and len(line) > 4
               and not line.startswith("NOTICIA")
               and not line.startswith("FUENTE")
@@ -183,7 +184,7 @@ def create_pdf(report_text, filepath):
             pdf.set_font("Helvetica", "B", 11)
             pdf.set_text_color(255, 255, 255)
             pdf.set_fill_color(180, 0, 0)
-            pdf.cell(page_w, 8, "  " + line, ln=True, fill=True)
+            pdf.cell(page_w, 8, "  " + line, new_x="LMARGIN", new_y="NEXT", fill=True)
             pdf.ln(2)
             pdf.set_text_color(30, 30, 30)
 
@@ -207,7 +208,7 @@ def create_pdf(report_text, filepath):
                 pdf.set_text_color(60, 130, 60)
                 label = "[ CONTEXTO ]"
             pdf.set_font("Helvetica", "B", 8)
-            pdf.cell(page_w, 5, label, ln=True)
+            pdf.cell(page_w, 5, label, new_x="LMARGIN", new_y="NEXT")
             pdf.set_text_color(30, 30, 30)
             pdf.ln(1)
 
@@ -232,7 +233,7 @@ def create_pdf(report_text, filepath):
             pdf.set_text_color(30, 30, 30)
             pdf.multi_cell(page_w, 5, line)
 
-    # ── Pie ────────────────────────────────────────────────────────
+    # ── Pie ─────────────────────────────────────────────────────────
     pdf.ln(6)
     pdf.set_draw_color(180, 0, 0)
     pdf.line(20, pdf.get_y(), 190, pdf.get_y())
@@ -245,16 +246,22 @@ def create_pdf(report_text, filepath):
 
 
 def upload_pdf(filepath):
-    filename = os.path.basename(filepath)
+    """
+    Sube el PDF a file.io (servicio gratuito, link valido 1 descarga / 1 dia).
+    Retorna la URL publica del archivo.
+    """
     with open(filepath, "rb") as f:
-        r = requests.put(
-            f"https://transfer.sh/{filename}",
-            data=f,
-            headers={"Max-Days": "1"},
+        r = requests.post(
+            "https://file.io",
+            files={"file": (os.path.basename(filepath), f, "application/pdf")},
+            data={"expires": "1d"},
             timeout=60,
         )
     r.raise_for_status()
-    return r.text.strip()
+    data = r.json()
+    if not data.get("success"):
+        raise Exception(f"file.io error: {data}")
+    return data["link"]
 
 
 def send_whatsapp(pdf_url, fecha):
@@ -264,7 +271,7 @@ def send_whatsapp(pdf_url, fecha):
         from_=TWILIO_FROM,
         to=WHATSAPP_TO,
         media_url=[pdf_url],
-        body=f"Reporte Noticias Chile\n{fecha}\n\nReporte completo adjunto. Link valido 24 hrs.",
+        body=f"Reporte Noticias Chile\n{fecha}\n\nReporte completo adjunto. Link valido por 1 descarga.",
     )
 
 
@@ -295,7 +302,7 @@ def main():
         print(f"  ERROR: {e}")
         sys.exit(1)
 
-    print("\n[3/3] Subiendo y enviando por WhatsApp...")
+    print("\n[3/3] Subiendo PDF y enviando WhatsApp...")
     try:
         url = upload_pdf(pdf_path)
         print(f"  URL: {url}")
