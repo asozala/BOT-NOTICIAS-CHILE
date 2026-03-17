@@ -28,7 +28,9 @@ Busca noticias sobre el gobierno de Jose Antonio Kast publicadas HOY.
 
 MEDIOS PRIORITARIOS (busca aunque tengan paywall):
 El Mercurio, La Tercera, La Segunda, Diario Financiero, Ex-Ante,
-Emol, El Libero, Pulso, BioBioChile, Cooperativa.
+Emol, El Libero, Pulso, BioBioChile, Cooperativa, El Mostrador,
+Ciper Chile, Radio Agricultura, La Nacion, T13, CNN Chile,
+Fast Check CL, Radio Biobio.
 
 FUENTES DE X (Twitter) — OBLIGATORIO buscar estas cuentas:
 - @ElMercurio_cl  → incluir como medio "El Mercurio (via @ElMercurio_cl)"
@@ -111,7 +113,9 @@ def generate_full_report() -> dict:
                 f"Hora: {now.strftime('%H:%M')} hrs (Santiago).\n\n"
                 "Busca todas las noticias de HOY sobre el gobierno de Kast.\n"
                 "1. Busca en medios: El Mercurio, La Tercera, Diario Financiero, "
-                "Emol, Cooperativa, Ex-Ante, El Libero, BioBioChile.\n"
+                "Emol, Cooperativa, Ex-Ante, El Libero, BioBioChile, El Mostrador, "
+                "Ciper Chile, Radio Agricultura, La Nacion, T13, CNN Chile, "
+                "Fast Check CL, Radio Biobio.\n"
                 "2. Busca OBLIGATORIAMENTE en X/Twitter: tweets de @ElMercurio_cl "
                 "y @lasegunda de hoy sobre Kast o el gobierno.\n"
                 "Responde SOLO con el JSON. Sin ningun texto adicional."
