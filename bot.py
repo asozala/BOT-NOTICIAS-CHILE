@@ -30,6 +30,11 @@ MEDIOS PRIORITARIOS (busca aunque tengan paywall):
 El Mercurio, La Tercera, La Segunda, Diario Financiero, Ex-Ante,
 Emol, El Libero, Pulso, BioBioChile, Cooperativa.
 
+FUENTES DE X (Twitter) — OBLIGATORIO buscar estas cuentas:
+- @ElMercurio_cl  → incluir como medio "El Mercurio (via @ElMercurio_cl)"
+- @lasegunda      → incluir como medio "La Segunda (via @lasegunda)"
+Busca sus tweets de hoy sobre el gobierno de Kast. Los tweets son publicos y no tienen paywall.
+
 CONTENIDO: Declaraciones de Kast y ministros, anuncios, proyectos de ley,
 reformas, crisis politicas, polemicas, evaluaciones del gobierno.
 
@@ -37,9 +42,10 @@ REGLAS CRITICAS:
 1. Responde UNICAMENTE con JSON valido. Sin texto extra. Sin markdown.
 2. Maximo 3 noticias por medio.
 3. Si puedes leer el articulo completo: escribe 2 oraciones de resumen.
-4. Si el articulo tiene paywall y NO puedes leerlo: igual incluye la noticia
-   con el titular y link, y en resumen escribe exactamente: "Articulo de pago."
-5. El JSON debe estar COMPLETO y bien cerrado.
+4. Si el articulo tiene paywall: incluye titular y link, resumen = "Articulo de pago."
+5. Para noticias de X/Twitter: usa el texto del tweet como resumen.
+6. Incluye la hora de publicacion de cada noticia si la conoces (formato HH:MM).
+7. El JSON debe estar COMPLETO y bien cerrado.
 
 Estructura exacta:
 {
@@ -52,17 +58,20 @@ Estructura exacta:
         {
           "titular": "Titular completo",
           "fecha": "DD/MM/YYYY",
+          "hora": "HH:MM",
           "autor": "Autor o cadena vacia",
           "resumen": "2 oraciones de resumen, o Articulo de pago.",
           "link": "https://url.cl",
-          "paywall": false
+          "paywall": false,
+          "fuente_x": false
         }
       ]
     }
   ]
 }
 
-Usa paywall: true cuando no puedas leer el contenido completo.
+Usa paywall: true cuando no puedas leer el contenido.
+Usa fuente_x: true para noticias obtenidas desde X/Twitter.
 Incluye SIEMPRE los titulares aunque no puedas leer la nota.
 """
 
@@ -101,8 +110,10 @@ def generate_full_report() -> dict:
                 f"Fecha actual: {now.strftime('%d/%m/%Y')} "
                 f"Hora: {now.strftime('%H:%M')} hrs (Santiago).\n\n"
                 "Busca todas las noticias de HOY sobre el gobierno de Kast.\n"
-                "Busca en: El Mercurio, La Tercera, Diario Financiero, "
+                "1. Busca en medios: El Mercurio, La Tercera, Diario Financiero, "
                 "Emol, Cooperativa, Ex-Ante, El Libero, BioBioChile.\n"
+                "2. Busca OBLIGATORIAMENTE en X/Twitter: tweets de @ElMercurio_cl "
+                "y @lasegunda de hoy sobre Kast o el gobierno.\n"
                 "Responde SOLO con el JSON. Sin ningun texto adicional."
             )
         }],
@@ -244,21 +255,28 @@ def build_html(data: dict) -> str:
         cards = ""
         for n in noticias:
             autor = f'<span class="meta-item">✍️ {n["autor"]}</span>' if n.get("autor") else ""
+            hora_noticia = f'<span class="meta-item">🕐 {n["hora"]}</span>' if n.get("hora") else ""
             link  = (f'<a href="{n["link"]}" target="_blank" class="ver-nota">'
                      f'Ver nota original →</a>') if n.get("link") else ""
             es_paywall = n.get("paywall", False) or n.get("resumen","") == "Articulo de pago."
+            es_x       = n.get("fuente_x", False)
             if es_paywall:
                 cuerpo = '<span class="paywall-badge">🔒 Artículo de pago — solo disponible en el sitio original</span>'
             else:
                 cuerpo = n.get("resumen", "").replace("\n", "<br>")
+            fuente_x_badge = '<div class="x-badge">* Fuente: X (<span class="x-handle">' + \
+                             (nombre.split("via ")[-1].rstrip(")") if "via " in nombre else "@Twitter") + \
+                             '</span>)</div>' if es_x else ""
             cards += f"""
-        <article class="card{'paywall-card' if es_paywall else ''}">
+        <article class="card {'paywall-card' if es_paywall else ''}">
           <h3 class="titular">{n.get("titular","")}</h3>
           <div class="meta">
             <span class="meta-item">📅 {n.get("fecha","")}</span>
+            {hora_noticia}
             {autor}
           </div>
           <div class="cuerpo">{cuerpo}</div>
+          {fuente_x_badge}
           <div class="card-footer">{link}</div>
         </article>"""
 
@@ -319,6 +337,8 @@ main{{max-width:880px;margin:0 auto;padding:20px 14px}}
                padding:6px 10px;border-radius:6px;font-size:.85em;
                border:1px solid #ffe082}}
 .paywall-card{{border-left-color:#ff8f00;opacity:.9}}
+.x-badge{{font-size:.78em;color:#888;margin-top:6px;font-style:italic}}
+.x-handle{{color:#1da1f2;font-weight:600;font-style:normal}}
 .vacio{{text-align:center;padding:60px 20px;color:#999}}
 footer{{text-align:center;padding:18px;color:#aaa;font-size:.78em;
         border-top:1px solid #e0e0e0;margin-top:12px}}
