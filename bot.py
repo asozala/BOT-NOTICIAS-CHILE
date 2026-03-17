@@ -26,7 +26,8 @@ CHILE_TZ = ZoneInfo("America/Santiago")
 PROMPT_FULL = """Eres un sistema profesional de media monitoring politico en Chile.
 Busca noticias sobre el gobierno de Jose Antonio Kast publicadas HOY.
 
-MEDIOS: El Mercurio, La Tercera, La Segunda, Diario Financiero, Ex-Ante,
+MEDIOS PRIORITARIOS (busca aunque tengan paywall):
+El Mercurio, La Tercera, La Segunda, Diario Financiero, Ex-Ante,
 Emol, El Libero, Pulso, BioBioChile, Cooperativa.
 
 CONTENIDO: Declaraciones de Kast y ministros, anuncios, proyectos de ley,
@@ -35,8 +36,10 @@ reformas, crisis politicas, polemicas, evaluaciones del gobierno.
 REGLAS CRITICAS:
 1. Responde UNICAMENTE con JSON valido. Sin texto extra. Sin markdown.
 2. Maximo 3 noticias por medio.
-3. El campo "resumen" debe tener MAXIMO 2 oraciones (menos de 100 palabras).
-4. El JSON debe estar COMPLETO y bien cerrado.
+3. Si puedes leer el articulo completo: escribe 2 oraciones de resumen.
+4. Si el articulo tiene paywall y NO puedes leerlo: igual incluye la noticia
+   con el titular y link, y en resumen escribe exactamente: "Articulo de pago."
+5. El JSON debe estar COMPLETO y bien cerrado.
 
 Estructura exacta:
 {
@@ -50,15 +53,17 @@ Estructura exacta:
           "titular": "Titular completo",
           "fecha": "DD/MM/YYYY",
           "autor": "Autor o cadena vacia",
-          "resumen": "Maximo 2 oraciones describiendo la noticia.",
-          "link": "https://url.cl"
+          "resumen": "2 oraciones de resumen, o Articulo de pago.",
+          "link": "https://url.cl",
+          "paywall": false
         }
       ]
     }
   ]
 }
 
-Solo incluye medios con noticias relevantes del gobierno hoy.
+Usa paywall: true cuando no puedas leer el contenido completo.
+Incluye SIEMPRE los titulares aunque no puedas leer la nota.
 """
 
 PROMPT_ALERT = """Eres un monitor de noticias urgentes del gobierno de Chile.
@@ -241,15 +246,19 @@ def build_html(data: dict) -> str:
             autor = f'<span class="meta-item">✍️ {n["autor"]}</span>' if n.get("autor") else ""
             link  = (f'<a href="{n["link"]}" target="_blank" class="ver-nota">'
                      f'Ver nota original →</a>') if n.get("link") else ""
-            texto = n.get("resumen", "").replace("\n", "<br>")
+            es_paywall = n.get("paywall", False) or n.get("resumen","") == "Articulo de pago."
+            if es_paywall:
+                cuerpo = '<span class="paywall-badge">🔒 Artículo de pago — solo disponible en el sitio original</span>'
+            else:
+                cuerpo = n.get("resumen", "").replace("\n", "<br>")
             cards += f"""
-        <article class="card">
+        <article class="card{'paywall-card' if es_paywall else ''}">
           <h3 class="titular">{n.get("titular","")}</h3>
           <div class="meta">
             <span class="meta-item">📅 {n.get("fecha","")}</span>
             {autor}
           </div>
-          <div class="cuerpo">{texto}</div>
+          <div class="cuerpo">{cuerpo}</div>
           <div class="card-footer">{link}</div>
         </article>"""
 
@@ -306,6 +315,10 @@ main{{max-width:880px;margin:0 auto;padding:20px 14px}}
 .card-footer{{border-top:1px solid #f0f0f0;padding-top:8px}}
 .ver-nota{{color:#b71c1c;text-decoration:none;font-size:.83em;font-weight:600}}
 .ver-nota:hover{{text-decoration:underline}}
+.paywall-badge{{display:inline-block;background:#fff8e1;color:#795548;
+               padding:6px 10px;border-radius:6px;font-size:.85em;
+               border:1px solid #ffe082}}
+.paywall-card{{border-left-color:#ff8f00;opacity:.9}}
 .vacio{{text-align:center;padding:60px 20px;color:#999}}
 footer{{text-align:center;padding:18px;color:#aaa;font-size:.78em;
         border-top:1px solid #e0e0e0;margin-top:12px}}
