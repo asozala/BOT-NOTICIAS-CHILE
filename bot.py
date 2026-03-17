@@ -24,30 +24,21 @@ CHILE_TZ = ZoneInfo("America/Santiago")
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
 PROMPT_FULL = """Eres un sistema profesional de media monitoring politico en Chile.
-Busca y recopila TODAS las noticias sobre el gobierno de Jose Antonio Kast
-publicadas HOY en los principales medios chilenos.
+Busca noticias sobre el gobierno de Jose Antonio Kast publicadas HOY.
 
-MEDIOS A MONITOREAR:
-- El Mercurio (alta prioridad)
-- La Tercera (alta prioridad)
-- La Segunda (alta prioridad)
-- Diario Financiero (alta prioridad)
-- Ex-Ante
-- Emol
-- El Libero
-- Pulso
-- BioBioChile
-- Cooperativa
+MEDIOS: El Mercurio, La Tercera, La Segunda, Diario Financiero, Ex-Ante,
+Emol, El Libero, Pulso, BioBioChile, Cooperativa.
 
-CONTENIDO A DETECTAR:
-Declaraciones del Presidente Kast, anuncios de ministros, proyectos de ley,
-reformas economicas, planes de gobierno, crisis politicas, polemicas,
-evaluaciones del gobierno, investigaciones periodisticas sobre el gobierno.
+CONTENIDO: Declaraciones de Kast y ministros, anuncios, proyectos de ley,
+reformas, crisis politicas, polemicas, evaluaciones del gobierno.
 
-REGLA CRITICA: Tu respuesta debe ser UNICAMENTE un JSON valido.
-Sin texto antes ni despues. Sin markdown. Sin backticks. Solo el JSON.
+REGLAS CRITICAS:
+1. Responde UNICAMENTE con JSON valido. Sin texto extra. Sin markdown.
+2. Maximo 3 noticias por medio.
+3. El campo "resumen" debe tener MAXIMO 2 oraciones (menos de 100 palabras).
+4. El JSON debe estar COMPLETO y bien cerrado.
 
-Estructura exacta requerida:
+Estructura exacta:
 {
   "fecha": "DD/MM/YYYY",
   "hora": "HH:MM",
@@ -56,18 +47,18 @@ Estructura exacta requerida:
       "nombre": "Nombre del Medio",
       "noticias": [
         {
-          "titular": "Titular completo de la noticia",
+          "titular": "Titular completo",
           "fecha": "DD/MM/YYYY",
-          "autor": "Nombre del autor o cadena vacia",
-          "resumen": "Descripcion completa en 3-5 parrafos detallados",
-          "link": "https://url-de-la-noticia.cl"
+          "autor": "Autor o cadena vacia",
+          "resumen": "Maximo 2 oraciones describiendo la noticia.",
+          "link": "https://url.cl"
         }
       ]
     }
   ]
 }
 
-Solo incluye medios que tengan noticias relevantes del gobierno hoy.
+Solo incluye medios con noticias relevantes del gobierno hoy.
 """
 
 PROMPT_ALERT = """Eres un monitor de noticias urgentes del gobierno de Chile.
@@ -125,10 +116,63 @@ def generate_full_report() -> dict:
     if start >= 0 and end > start:
         raw = raw[start:end]
 
+    # Intento 1: JSON completo
     try:
         return json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise Exception(f"JSON invalido: {e}\nRespuesta recibida: {raw[:300]}")
+    except json.JSONDecodeError:
+        pass
+
+    # Intento 2: el JSON fue truncado — reconstruir lo que este completo
+    # Buscar la ultima noticia completa (ultimo "}" antes del corte)
+    # Cerrar el JSON manualmente
+    try:
+        # Contar llaves abiertas para saber cuantas hay que cerrar
+        depth = 0
+        last_valid_pos = 0
+        in_string = False
+        escape_next = False
+        for i, ch in enumerate(raw):
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == '\\' and in_string:
+                escape_next = True
+                continue
+            if ch == '"' and not escape_next:
+                in_string = not in_string
+            if not in_string:
+                if ch == '{':
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0:
+                        last_valid_pos = i + 1
+
+        if last_valid_pos > 0:
+            truncated = raw[:last_valid_pos]
+            # Cerrar arrays y objetos abiertos
+            depth2 = 0
+            brackets = []
+            in_str2 = False
+            esc2 = False
+            for ch in truncated:
+                if esc2: esc2 = False; continue
+                if ch == '\\' and in_str2: esc2 = True; continue
+                if ch == '"': in_str2 = not in_str2
+                if not in_str2:
+                    if ch in '{[': brackets.append(ch)
+                    elif ch in '}]': brackets.pop() if brackets else None
+            closing = ""
+            for b in reversed(brackets):
+                closing += "}" if b == "{" else "]"
+            fixed = truncated + closing
+            result = json.loads(fixed)
+            print("  Advertencia: JSON truncado, recuperados datos parciales")
+            return result
+    except Exception:
+        pass
+
+    raise Exception(f"JSON invalido.\nRespuesta recibida: {raw[:300]}")
 
 
 def check_breaking_news() -> str | None:
