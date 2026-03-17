@@ -1,13 +1,11 @@
 """
-Bot de Monitoreo de Noticias Chile - VERSION FINAL
-- Usa claude-haiku (15x mas barato que sonnet)
-- Envia el reporte como mensajes de texto por WhatsApp
-- Sin dependencia de servicios externos de subida
+Bot Monitor Noticias Chile
+  python bot.py full   -> reporte completo + GitHub Pages + WhatsApp
+  python bot.py alert  -> busca urgentes + WhatsApp si hay algo importante
 """
 
 import anthropic
-import os
-import sys
+import os, sys, json, base64, requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from twilio.rest import Client as TwilioClient
@@ -18,89 +16,140 @@ TWILIO_ACCOUNT_SID = os.environ["TWILIO_ACCOUNT_SID"]
 TWILIO_AUTH_TOKEN  = os.environ["TWILIO_AUTH_TOKEN"]
 TWILIO_FROM        = os.environ["TWILIO_WHATSAPP_FROM"]
 WHATSAPP_TO        = os.environ["WHATSAPP_TO"]
+GITHUB_TOKEN       = os.environ["GITHUB_TOKEN"]
+GITHUB_REPO        = os.environ["GITHUB_REPOSITORY"]   # automatico en Actions
 
 CHILE_TZ = ZoneInfo("America/Santiago")
 
-# ── Prompt del sistema ────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Eres un agente de monitoreo de noticias de Chile.
-Generas reportes diarios completos y verificables sobre politica y economia chilena.
+# ── Prompts ───────────────────────────────────────────────────────────────────
 
-FOCO PRIORITARIO:
-1. Gobierno de Kast: declaraciones, anuncios, politicas, gabinete, ministros.
-2. Politica nacional: Congreso, proyectos de ley, partidos politicos.
-3. Economia: dolar, cobre, inflacion, Banco Central, mineria (cobre/litio).
-4. Internacional con impacto en Chile: EEUU, China, commodities, region.
+PROMPT_FULL = """Eres un sistema profesional de media monitoring politico en Chile.
+Busca y recopila TODAS las noticias sobre el gobierno de Jose Antonio Kast
+publicadas HOY en los principales medios chilenos.
 
-FUENTES: El Mercurio, La Tercera, Diario Financiero, Emol, El Mostrador,
-BioBioChile, Cooperativa, T13, CNN Chile, Ex-Ante, Ciper Chile.
+MEDIOS A MONITOREAR:
+- El Mercurio (alta prioridad)
+- La Tercera (alta prioridad)
+- La Segunda (alta prioridad)
+- Diario Financiero (alta prioridad)
+- Ex-Ante
+- Emol
+- El Libero
+- Pulso
+- BioBioChile
+- Cooperativa
 
-REGLAS CRITICAS:
-- Jamas inventar noticias, citas ni fuentes.
-- Solo reportar informacion verificable en medios confiables.
-- Estilo claro, profesional, neutral y analitico.
+CONTENIDO A DETECTAR:
+Declaraciones del Presidente Kast, anuncios de ministros, proyectos de ley,
+reformas economicas, planes de gobierno, crisis politicas, polemicas,
+evaluaciones del gobierno, investigaciones periodisticas sobre el gobierno.
 
-ESTRUCTURA EXACTA (usa exactamente estos encabezados):
+REGLA CRITICA: Tu respuesta debe ser UNICAMENTE un JSON valido.
+Sin texto antes ni despues. Sin markdown. Sin backticks. Solo el JSON.
 
---- REPORTE NOTICIAS CHILE ---
-Fecha: [fecha]  Hora: [hora] hrs
+Estructura exacta requerida:
+{
+  "fecha": "DD/MM/YYYY",
+  "hora": "HH:MM",
+  "medios": [
+    {
+      "nombre": "Nombre del Medio",
+      "noticias": [
+        {
+          "titular": "Titular completo de la noticia",
+          "fecha": "DD/MM/YYYY",
+          "autor": "Nombre del autor o cadena vacia",
+          "resumen": "Descripcion completa en 3-5 parrafos detallados",
+          "link": "https://url-de-la-noticia.cl"
+        }
+      ]
+    }
+  ]
+}
 
-== RESUMEN EJECUTIVO ==
-[6-8 lineas con los eventos mas importantes del dia]
+Solo incluye medios que tengan noticias relevantes del gobierno hoy.
+"""
 
-== GOBIERNO Y POLITICA ==
+PROMPT_ALERT = """Eres un monitor de noticias urgentes del gobierno de Chile.
+Busca noticias IMPORTANTES publicadas en las ultimas 3 horas sobre
+el gobierno de Jose Antonio Kast en los medios chilenos.
 
-[ALTA] Titular de la noticia
-Que ocurrio, quien lo anuncio, contexto y consecuencias.
-Fuente: [medio/s]
+Considera importante: anuncios presidenciales, crisis politica, medidas economicas
+urgentes, cambios de gabinete, proyectos de ley enviados al Congreso,
+declaraciones polemicas de ministros.
 
-[MEDIA] Titular de la noticia
-Descripcion breve.
-Fuente: [medio/s]
+Si hay noticias importantes, responde EXACTAMENTE asi (sin texto extra):
+ALERTA
+[Nombre del medio]: [Titular completo]
+[Nombre del medio]: [Titular completo]
 
-== ECONOMIA ==
-
-[ALTA] Titular
-Descripcion.
-Fuente: [medio/s]
-
-Indicadores: Dolar $[val] | Cobre $[val]/lb | Petroleo $[val] | IPSA [val]
-
-== INTERNACIONAL ==
-
-[MEDIA] Titular
-Como impacta a Chile.
-Fuente: [medio/s]
-
---- FIN DEL REPORTE ---"""
+Si NO hay noticias importantes nuevas en las ultimas 3 horas, responde EXACTAMENTE:
+SIN_NOVEDADES"""
 
 
-def get_periodo():
-    now = datetime.now(CHILE_TZ)
-    return "MANANA" if now.hour < 13 else "TARDE"
+# ── Generacion de contenido ───────────────────────────────────────────────────
 
-
-def generate_report() -> str:
-    """Genera el reporte usando Claude Haiku con busqueda web."""
+def generate_full_report() -> dict:
+    """Genera reporte completo. Retorna dict con estructura de medios y noticias."""
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     now    = datetime.now(CHILE_TZ)
-    fecha  = now.strftime("%d/%m/%Y")
-    hora   = now.strftime("%H:%M")
 
     response = client.messages.create(
-        model="claude-haiku-4-5-20251001",   # Haiku: ~15x mas barato que Sonnet
+        model="claude-haiku-4-5-20251001",
         max_tokens=4000,
-        system=SYSTEM_PROMPT,
+        system=PROMPT_FULL,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{
             "role": "user",
             "content": (
-                f"Genera el REPORTE DE {get_periodo()} del {fecha} a las {hora} hrs.\n\n"
-                "Busca en la web las noticias mas importantes de Chile de hoy:\n"
-                "1. Noticias politicas del gobierno Kast\n"
-                "2. Economia chilena: dolar, cobre, mercados\n"
-                "3. Congreso: proyectos y votaciones del dia\n"
-                "4. Noticias internacionales que afecten a Chile\n\n"
-                "Incluye todas las noticias relevantes que encuentres."
+                f"Fecha actual: {now.strftime('%d/%m/%Y')} "
+                f"Hora: {now.strftime('%H:%M')} hrs (Santiago).\n\n"
+                "Busca todas las noticias de HOY sobre el gobierno de Kast.\n"
+                "Busca en: El Mercurio, La Tercera, Diario Financiero, "
+                "Emol, Cooperativa, Ex-Ante, El Libero, BioBioChile.\n"
+                "Responde SOLO con el JSON. Sin ningun texto adicional."
+            )
+        }],
+    )
+
+    raw = ""
+    for block in response.content:
+        if hasattr(block, "text"):
+            raw += block.text
+
+    raw = raw.strip()
+
+    # Extraer JSON aunque haya texto alrededor
+    start = raw.find("{")
+    end   = raw.rfind("}") + 1
+    if start >= 0 and end > start:
+        raw = raw[start:end]
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise Exception(f"JSON invalido: {e}\nRespuesta recibida: {raw[:300]}")
+
+
+def check_breaking_news() -> str | None:
+    """
+    Busca noticias urgentes de las ultimas 3 horas.
+    Retorna string con alertas, o None si no hay novedades.
+    """
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    now    = datetime.now(CHILE_TZ)
+
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=400,
+        system=PROMPT_ALERT,
+        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Son las {now.strftime('%H:%M')} hrs del "
+                f"{now.strftime('%d/%m/%Y')} en Santiago.\n"
+                "Busca noticias urgentes del gobierno de Kast de las ultimas 3 horas."
             )
         }],
     )
@@ -109,79 +158,284 @@ def generate_report() -> str:
     for block in response.content:
         if hasattr(block, "text"):
             text += block.text
-    return text.strip()
+
+    text = text.strip()
+
+    if not text or "SIN_NOVEDADES" in text:
+        return None
+    if "ALERTA" in text:
+        return text.replace("ALERTA", "").strip()
+    return None
 
 
-def send_whatsapp_report(report: str, fecha: str) -> None:
+# ── Generacion HTML ───────────────────────────────────────────────────────────
+
+def build_html(data: dict) -> str:
+    """Genera pagina HTML profesional con filtros por medio."""
+    now    = datetime.now(CHILE_TZ)
+    fecha  = now.strftime("%d de %B de %Y")
+    hora   = now.strftime("%H:%M")
+    medios = [m["nombre"] for m in data.get("medios", [])]
+    total  = sum(len(m.get("noticias", [])) for m in data.get("medios", []))
+
+    # Botones de filtro
+    btns = '<button class="btn active" onclick="filtrar(\'all\', this)">Todos</button>\n'
+    for medio in medios:
+        safe = medio.replace("'", "\\'")
+        btns += f'    <button class="btn" onclick="filtrar(\'{safe}\', this)">{medio}</button>\n'
+
+    # Secciones de noticias
+    secciones = ""
+    for m in data.get("medios", []):
+        nombre   = m["nombre"]
+        noticias = m.get("noticias", [])
+        if not noticias:
+            continue
+
+        cards = ""
+        for n in noticias:
+            autor = f'<span class="meta-item">✍️ {n["autor"]}</span>' if n.get("autor") else ""
+            link  = (f'<a href="{n["link"]}" target="_blank" class="ver-nota">'
+                     f'Ver nota original →</a>') if n.get("link") else ""
+            texto = n.get("resumen", "").replace("\n", "<br>")
+            cards += f"""
+        <article class="card">
+          <h3 class="titular">{n.get("titular","")}</h3>
+          <div class="meta">
+            <span class="meta-item">📅 {n.get("fecha","")}</span>
+            {autor}
+          </div>
+          <div class="cuerpo">{texto}</div>
+          <div class="card-footer">{link}</div>
+        </article>"""
+
+        count = len(noticias)
+        secciones += f"""
+  <section class="seccion" data-medio="{nombre}">
+    <div class="seccion-header">
+      <h2 class="medio-titulo">{nombre}</h2>
+      <span class="badge">{count} noticia{"s" if count != 1 else ""}</span>
+    </div>
+    {cards}
+  </section>"""
+
+    contenido = secciones if secciones else (
+        '<div class="vacio">No se encontraron noticias relevantes.</div>'
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor Noticias Gobierno Chile — {fecha}</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+     background:#f2f3f5;color:#222;line-height:1.6}}
+header{{background:#b71c1c;color:#fff;padding:16px 20px;position:sticky;
+        top:0;z-index:100;box-shadow:0 2px 6px rgba(0,0,0,.25)}}
+header h1{{font-size:1.2em;font-weight:700}}
+header p{{font-size:.82em;opacity:.85;margin-top:3px}}
+.stats{{display:inline-block;background:rgba(255,255,255,.2);
+        padding:2px 10px;border-radius:12px;font-size:.78em;margin-top:5px}}
+.filtros{{background:#fff;padding:12px 20px;border-bottom:1px solid #ddd;
+          display:flex;gap:8px;flex-wrap:wrap}}
+.btn{{padding:5px 14px;border:2px solid #b71c1c;background:#fff;color:#b71c1c;
+      border-radius:20px;cursor:pointer;font-size:.82em;font-weight:600;
+      transition:all .15s}}
+.btn:hover,.btn.active{{background:#b71c1c;color:#fff}}
+main{{max-width:880px;margin:0 auto;padding:20px 14px}}
+.seccion{{margin-bottom:32px}}
+.seccion-header{{display:flex;align-items:center;justify-content:space-between;
+                 border-bottom:3px solid #b71c1c;padding-bottom:8px;margin-bottom:14px}}
+.medio-titulo{{font-size:1.2em;font-weight:700;color:#b71c1c;text-transform:uppercase;
+               letter-spacing:.5px}}
+.badge{{background:#b71c1c;color:#fff;padding:2px 10px;border-radius:12px;
+        font-size:.78em;font-weight:600}}
+.card{{background:#fff;border-radius:8px;padding:18px;margin-bottom:12px;
+       box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #b71c1c}}
+.titular{{font-size:1em;font-weight:700;color:#111;margin-bottom:7px}}
+.meta{{display:flex;gap:14px;font-size:.78em;color:#777;margin-bottom:10px;
+       flex-wrap:wrap}}
+.cuerpo{{font-size:.9em;color:#333;line-height:1.7;margin-bottom:10px}}
+.card-footer{{border-top:1px solid #f0f0f0;padding-top:8px}}
+.ver-nota{{color:#b71c1c;text-decoration:none;font-size:.83em;font-weight:600}}
+.ver-nota:hover{{text-decoration:underline}}
+.vacio{{text-align:center;padding:60px 20px;color:#999}}
+footer{{text-align:center;padding:18px;color:#aaa;font-size:.78em;
+        border-top:1px solid #e0e0e0;margin-top:12px}}
+@media(max-width:600px){{header h1{{font-size:1em}}.card{{padding:12px}}}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🇨🇱 Monitor Noticias Gobierno Chile</h1>
+  <p>Última actualización: {fecha} — {hora} hrs (Santiago)</p>
+  <span class="stats">{total} noticias · {len(medios)} medios monitoreados</span>
+</header>
+
+<div class="filtros">
+  {btns}
+</div>
+
+<main id="main">
+{contenido}
+</main>
+
+<footer>Monitor Noticias Chile — Generado el {fecha} a las {hora} hrs · Solo uso interno</footer>
+
+<script>
+function filtrar(medio, btn) {{
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.seccion').forEach(s => {{
+    s.style.display = (medio === 'all' || s.dataset.medio === medio) ? '' : 'none';
+  }});
+}}
+</script>
+</body>
+</html>"""
+
+
+# ── GitHub Pages ──────────────────────────────────────────────────────────────
+
+def push_html(html: str) -> str:
     """
-    Envia el reporte por WhatsApp dividido en partes de 1400 caracteres.
-    Twilio Sandbox tiene limite de 1600 chars — usamos 1400 para tener margen.
+    Sube docs/index.html al repositorio via GitHub API.
+    Retorna la URL de GitHub Pages.
     """
-    twilio = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    owner, repo_name = GITHUB_REPO.split("/")
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    api_url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/docs/index.html"
+    content_b64 = base64.b64encode(html.encode("utf-8")).decode("utf-8")
+    now_str     = datetime.now(CHILE_TZ).strftime("%Y-%m-%d %H:%M")
 
-    MAX_CHARS = 1400
-    parts     = []
-    lines     = report.split("\n")
-    current   = ""
+    # Obtener SHA si el archivo ya existe
+    sha = None
+    r = requests.get(api_url, headers=headers, timeout=30)
+    if r.status_code == 200:
+        sha = r.json().get("sha")
 
-    # Divide por lineas para no cortar palabras a la mitad
-    for line in lines:
-        if len(current) + len(line) + 1 > MAX_CHARS:
-            if current.strip():
-                parts.append(current.strip())
-            current = line + "\n"
-        else:
-            current += line + "\n"
+    payload = {
+        "message": f"Actualizar reporte {now_str}",
+        "content": content_b64,
+        "branch":  "main",
+    }
+    if sha:
+        payload["sha"] = sha
 
-    if current.strip():
-        parts.append(current.strip())
+    r = requests.put(api_url, headers=headers, json=payload, timeout=30)
+    r.raise_for_status()
 
-    total = len(parts)
-    print(f"  Enviando {total} mensajes...")
+    return f"https://{owner}.github.io/{repo_name}/"
 
-    for i, part in enumerate(parts, 1):
-        # Encabezado solo en el primer mensaje
-        if i == 1:
-            body = f"📰 *Reporte Noticias Chile*\n_{fecha}_\n\n{part}"
-        else:
-            body = f"📰 *[{i}/{total}]*\n\n{part}"
 
-        twilio.messages.create(
-            from_=TWILIO_FROM,
-            to=WHATSAPP_TO,
-            body=body,
-        )
-        print(f"  ✓ Mensaje {i}/{total} enviado")
+# ── WhatsApp ──────────────────────────────────────────────────────────────────
 
+def send_whatsapp(body: str) -> None:
+    TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN).messages.create(
+        from_=TWILIO_FROM,
+        to=WHATSAPP_TO,
+        body=body,
+    )
+
+
+# ── Modos de ejecucion ────────────────────────────────────────────────────────
+
+def run_full():
+    """Reporte completo: genera → publica → notifica."""
+    now = datetime.now(CHILE_TZ)
+    print(f"\n[1/3] Generando reporte completo...")
+    data  = generate_full_report()
+    total = sum(len(m.get("noticias",[])) for m in data.get("medios",[]))
+    nmed  = len(data.get("medios",[]))
+    print(f"  OK — {total} noticias de {nmed} medios")
+
+    print(f"\n[2/3] Publicando en GitHub Pages...")
+    html = build_html(data)
+    url  = push_html(html)
+    print(f"  OK — {url}")
+
+    print(f"\n[3/3] Enviando notificacion WhatsApp...")
+    fecha_str = now.strftime("%d/%m/%Y %H:%M")
+
+    # Resumen de titulares (max 2 por medio)
+    resumen = ""
+    for m in data.get("medios", []):
+        noticias = m.get("noticias", [])[:2]
+        if noticias:
+            resumen += f"\n*{m['nombre']}*\n"
+            for n in noticias:
+                resumen += f"• {n.get('titular','')}\n"
+
+    msg = (
+        f"📰 *Monitor Noticias Gobierno Chile*\n"
+        f"_{fecha_str} hrs_\n"
+        f"_{total} noticias · {nmed} medios_\n"
+        f"{resumen}\n"
+        f"🔗 Reporte completo:\n{url}"
+    )
+    send_whatsapp(msg)
+    print("  OK — WhatsApp enviado")
+
+
+def run_alert():
+    """Chequeo rapido: busca urgentes, notifica solo si hay algo."""
+    now = datetime.now(CHILE_TZ)
+    print(f"\n[1/2] Buscando noticias urgentes ({now.strftime('%H:%M')})...")
+    alertas = check_breaking_news()
+
+    if not alertas:
+        print("  Sin novedades. No se envia mensaje.")
+        return
+
+    print(f"  Noticias urgentes encontradas!")
+    owner, repo_name = GITHUB_REPO.split("/")
+    url = f"https://{owner}.github.io/{repo_name}/"
+
+    print(f"\n[2/2] Enviando alerta WhatsApp...")
+    msg = (
+        f"🚨 *Alerta Noticias Chile*\n"
+        f"_{now.strftime('%H:%M')} hrs_\n\n"
+        f"{alertas}\n\n"
+        f"🔗 Ver reporte:\n{url}"
+    )
+    send_whatsapp(msg)
+    print("  OK — Alerta enviada")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    now = datetime.now(CHILE_TZ)
+    if len(sys.argv) < 2 or sys.argv[1] not in ("full", "alert"):
+        print("Uso: python bot.py [full|alert]")
+        sys.exit(1)
+
+    mode = sys.argv[1]
+    now  = datetime.now(CHILE_TZ)
     print("=" * 50)
-    print("  BOT NOTICIAS CHILE")
+    print(f"  BOT NOTICIAS CHILE — {'REPORTE COMPLETO' if mode == 'full' else 'ALERTA'}")
     print(f"  {now.strftime('%d/%m/%Y %H:%M')} hrs (Santiago)")
     print("=" * 50)
 
-    fecha_display = now.strftime("%A %d de %B de %Y, %H:%M hrs")
-
-    # 1. Generar reporte
-    print("\n[1/2] Generando reporte (Claude Haiku + web)...")
     try:
-        report = generate_report()
-        print(f"  ✓ Reporte generado ({len(report)} caracteres)")
+        if mode == "full":
+            run_full()
+        else:
+            run_alert()
+        print("\n✅ Bot finalizado correctamente")
     except Exception as e:
-        print(f"  ✗ ERROR: {e}")
+        print(f"\n❌ ERROR: {e}")
+        try:
+            send_whatsapp(f"Bot Noticias ERROR ({mode}):\n{str(e)[:200]}")
+        except Exception:
+            pass
         sys.exit(1)
-
-    # 2. Enviar por WhatsApp
-    print("\n[2/2] Enviando por WhatsApp...")
-    try:
-        send_whatsapp_report(report, fecha_display)
-        print("  ✓ Envio completado")
-    except Exception as e:
-        print(f"  ✗ ERROR: {e}")
-        sys.exit(1)
-
-    print("\n✅ Bot finalizado correctamente")
 
 
 if __name__ == "__main__":
