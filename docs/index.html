@@ -37,6 +37,10 @@ main{max-width:880px;margin:0 auto;padding:20px 14px}
 .card-footer{border-top:1px solid #f0f0f0;padding-top:8px}
 .ver-nota{color:#b71c1c;text-decoration:none;font-size:.83em;font-weight:600}
 .ver-nota:hover{text-decoration:underline}
+.paywall-badge{display:inline-block;background:#fff8e1;color:#795548;
+               padding:6px 10px;border-radius:6px;font-size:.85em;
+               border:1px solid #ffe082}
+.paywall-card{border-left-color:#ff8f00;opacity:.9}
 .vacio{text-align:center;padding:60px 20px;color:#999}
 footer{text-align:center;padding:18px;color:#aaa;font-size:.78em;
         border-top:1px solid #e0e0e0;margin-top:12px}
@@ -46,20 +50,72 @@ footer{text-align:center;padding:18px;color:#aaa;font-size:.78em;
 <body>
 <header>
   <h1>🇨🇱 Monitor Noticias Gobierno Chile</h1>
-  <p>Última actualización: 17 de March de 2026 — 10:24 hrs (Santiago)</p>
-  <span class="stats">4 noticias · 3 medios monitoreados</span>
+  <p>Última actualización: 17 de March de 2026 — 10:37 hrs (Santiago)</p>
+  <span class="stats">8 noticias · 5 medios monitoreados</span>
 </header>
 
 <div class="filtros">
   <button class="btn active" onclick="filtrar('all', this)">Todos</button>
-    <button class="btn" onclick="filtrar('BioBioChile', this)">BioBioChile</button>
-    <button class="btn" onclick="filtrar('Diario Financiero', this)">Diario Financiero</button>
     <button class="btn" onclick="filtrar('Emol', this)">Emol</button>
+    <button class="btn" onclick="filtrar('Cooperativa', this)">Cooperativa</button>
+    <button class="btn" onclick="filtrar('BioBioChile', this)">BioBioChile</button>
+    <button class="btn" onclick="filtrar('La Tercera', this)">La Tercera</button>
+    <button class="btn" onclick="filtrar('Diario Financiero', this)">Diario Financiero</button>
 
 </div>
 
 <main id="main">
 
+  <section class="seccion" data-medio="Emol">
+    <div class="seccion-header">
+      <h2 class="medio-titulo">Emol</h2>
+      <span class="badge">1 noticia</span>
+    </div>
+    
+        <article class="card">
+          <h3 class="titular">Kast lanza Plan Escudo Fronterizo y llama a la unidad en materia de seguridad: 'Aquí no valen las pequeñeces'</h3>
+          <div class="meta">
+            <span class="meta-item">📅 17/03/2026</span>
+            
+          </div>
+          <div class="cuerpo">Presidente Kast visitó la frontera en Arica y Parinacota para lanzar el Plan Escudo Fronterizo con construcción de zanjas para frenar migración irregular. Kast pidió unidad política en seguridad y reportó detención de 2.905 personas en operativos conjuntos.</div>
+          <div class="card-footer"><a href="https://www.emol.com/noticias/Nacional/2026/03/16/1194424/kast-frontera-unidad-pequeneces.html" target="_blank" class="ver-nota">Ver nota original →</a></div>
+        </article>
+  </section>
+  <section class="seccion" data-medio="Cooperativa">
+    <div class="seccion-header">
+      <h2 class="medio-titulo">Cooperativa</h2>
+      <span class="badge">3 noticias</span>
+    </div>
+    
+        <article class="card">
+          <h3 class="titular">Senador PC acusa que plan de reconstrucción de Kast es una 'contrarreforma tributaria'</h3>
+          <div class="meta">
+            <span class="meta-item">📅 17/03/2026</span>
+            
+          </div>
+          <div class="cuerpo">Senador comunista Daniel Núñez criticó el Plan de Reconstrucción Nacional como 'contrarreforma tributaria encubierta' que disminuiría ingresos fiscales en 2.800 millones de dólares anuales. Denunció que medidas benefician al 1% más rico.</div>
+          <div class="card-footer"><a href="https://www.cooperativa.cl/noticias/pais/politica/agenda-legislativa/senador-pc-acusa-que-plan-de-reconstruccion-de-kast-es-una/2026-03-16/075612.html" target="_blank" class="ver-nota">Ver nota original →</a></div>
+        </article>
+        <article class="card">
+          <h3 class="titular">Kast visitó construcción de zanja fronteriza: Pidió unidad política y replicar medida en países vecinos</h3>
+          <div class="meta">
+            <span class="meta-item">📅 17/03/2026</span>
+            
+          </div>
+          <div class="cuerpo">Kast supervisó construcción de zanjas en frontera norte y realizó primer comité de seguridad con ministros en Arica. Instó a replicar medida en Perú, Bolivia y Argentina para combatir narcotráfico y migración irregular.</div>
+          <div class="card-footer"><a href="https://www.cooperativa.cl/noticias/pais/presidente-kast/kast-visito-construccion-de-zanja-fronteriza-pidio-unidad-politica-y/2026-03-16/133133.html" target="_blank" class="ver-nota">Ver nota original →</a></div>
+        </article>
+        <article class="card">
+          <h3 class="titular">El plan de Kast para la educación superior: limitar la gratuidad y descartar el FES</h3>
+          <div class="meta">
+            <span class="meta-item">📅 17/03/2026</span>
+            
+          </div>
+          <div class="cuerpo">Gobierno confirma que no apoyará el Fondo de Educación Superior (FES) de Boric. El plan limita gratuidad a menores de 30 años y propone mecanismos más estrictos para cobro de deudas CAE.</div>
+          <div class="card-footer"><a href="https://www.cooperativa.cl/noticias/pais/educacion/el-plan-de-kast-para-la-educacion-superior-limitar-la-gratuidad-y/2026-03-16/091510.html" target="_blank" class="ver-nota">Ver nota original →</a></div>
+        </article>
+  </section>
   <section class="seccion" data-medio="BioBioChile">
     <div class="seccion-header">
       <h2 class="medio-titulo">BioBioChile</h2>
@@ -67,22 +123,38 @@ footer{text-align:center;padding:18px;color:#aaa;font-size:.78em;
     </div>
     
         <article class="card">
-          <h3 class="titular">La propuesta nacida en 2025 para limitar la gratuidad que actualmente analiza el gobierno de Kast</h3>
+          <h3 class="titular">¿Volverán las alzas semanales? Las opciones que podría tomar el Gobierno si decide ajustar el MEPCO</h3>
           <div class="meta">
             <span class="meta-item">📅 17/03/2026</span>
             
           </div>
-          <div class="cuerpo">El gobierno de Kast analiza limitar la gratuidad universitaria a estudiantes menores de 30 años, medida que fue originalmente propuesta en 2025 por una comisión de ajuste fiscal de la administración Boric. El ministro de Hacienda Jorge Quiroz aclaró que quienes actualmente reciben gratuidad mantienen el beneficio, pero se previene que nuevos postulantes mayores de 30 años no accedan a ella.</div>
-          <div class="card-footer"><a href="https://www.biobiochile.cl/noticias/nacional/chile/2026/03/16/la-propuesta-de-2025-para-limitar-la-gratuidad-que-actualmente-analiza-el-gobierno-de-kast.shtml" target="_blank" class="ver-nota">Ver nota original →</a></div>
+          <div class="cuerpo">Gobierno analiza posibles modificaciones al MEPCO tras alzas de combustibles. Opciones incluyen traspasar cambios semanalmente o aumentar banda de estabilización, pero cambios requerirían aprobación legislativa.</div>
+          <div class="card-footer"><a href="https://www.biobiochile.cl/noticias/economia/actualidad-economica/2026/03/17/volveran-las-alzas-semanales-las-opciones-que-podria-tomar-el-gobierno-para-ajustar-el-mepco.shtml" target="_blank" class="ver-nota">Ver nota original →</a></div>
         </article>
         <article class="card">
-          <h3 class="titular">Kast en La Moneda: la tensión interna en la Cancillería y el incierto futuro de la carrera diplomática</h3>
+          <h3 class="titular">40 Horas: sigue la controversia por las 'correcciones administrativas' a la ley emblema de Boric</h3>
           <div class="meta">
-            <span class="meta-item">📅 16/03/2026</span>
+            <span class="meta-item">📅 17/03/2026</span>
             
           </div>
-          <div class="cuerpo">Con la llegada de Kast a La Moneda, la Cancillería enfrenta tensiones internas por la vigilancia sobre diplomáticos que apoyaron el Acuerdo por la Paz de 2019. Se especula sobre posibles cambios en embajadores y la proporción del 80% de carrera diplomática que se ha mantenido desde el retorno a la democracia.</div>
-          <div class="card-footer"><a href="https://www.biobiochile.cl/especial/bbcl-investiga/noticias/de-pasillo/2026/03/16/kast-en-la-moneda-la-tension-interna-en-la-cancilleria-y-el-incierto-futuro-de-la-carrera-diplomatica.shtml" target="_blank" class="ver-nota">Ver nota original →</a></div>
+          <div class="cuerpo">Gobierno anuncia revisión de regulaciones de la ley de 40 horas para buscar 'mayor empleo' sin modificar la ley. Expertos dudan de cambios sustantivos y CUT advierte riesgo de retroceso en derechos laborales.</div>
+          <div class="card-footer"><a href="https://www.biobiochile.cl/noticias/economia/actualidad-economica/2026/03/17/40-horas-sigue-la-controversia-por-las-correcciones-administrativas-a-la-ley-emblema-de-boric.shtml" target="_blank" class="ver-nota">Ver nota original →</a></div>
+        </article>
+  </section>
+  <section class="seccion" data-medio="La Tercera">
+    <div class="seccion-header">
+      <h2 class="medio-titulo">La Tercera</h2>
+      <span class="badge">1 noticia</span>
+    </div>
+    
+        <article class="card">
+          <h3 class="titular">'Contrarreforma tributaria encubierta' y 'oportunismo': senadores de oposición cuestionan rebaja de impuestos de Plan de Reconstrucción Nacional de Kast</h3>
+          <div class="meta">
+            <span class="meta-item">📅 17/03/2026</span>
+            
+          </div>
+          <div class="cuerpo">Senadores de oposición cuestionan medidas económicas del plan presentadas el fin de semana, especialmente rebajas tributarias y limitaciones a gratuidad universitaria. Proyecto se espera ingrese a Congreso primera semana de abril.</div>
+          <div class="card-footer"><a href="https://www.latercera.com/politica/noticia/contrarreforma-tributaria-encubierta-y-oportunismo-senadores-de-oposicion-cuestionan-rebaja-de-impuestos-de-plan-de-reconstruccion-nacional-de-kast/" target="_blank" class="ver-nota">Ver nota original →</a></div>
         </article>
   </section>
   <section class="seccion" data-medio="Diario Financiero">
@@ -92,34 +164,18 @@ footer{text-align:center;padding:18px;color:#aaa;font-size:.78em;
     </div>
     
         <article class="card">
-          <h3 class="titular">La ministra de la Mujer destaca ejes fundamentales de su cartera</h3>
+          <h3 class="titular">Presidente Kast anuncia Plan de Reconstrucción: inyectará $400 mil millones para zonas afectadas por incendios y rebaja al impuesto corporativo</h3>
           <div class="meta">
-            <span class="meta-item">📅 16/03/2026</span>
+            <span class="meta-item">📅 17/03/2026</span>
             
           </div>
-          <div class="cuerpo">La ministra de la Mujer, Judith Marín, destacó que los tres ejes fundamentales de su cartera estarán enfocados en empleo femenino, violencia de género y disminución de las listas de espera de enfermedades oncológicas.</div>
-          <div class="card-footer"><a href="https://www.df.cl" target="_blank" class="ver-nota">Ver nota original →</a></div>
-        </article>
-  </section>
-  <section class="seccion" data-medio="Emol">
-    <div class="seccion-header">
-      <h2 class="medio-titulo">Emol</h2>
-      <span class="badge">1 noticia</span>
-    </div>
-    
-        <article class="card">
-          <h3 class="titular">Cifras de deudores del CAE: Cuántos son los morosos del crédito que el Gobierno de Kast busca que paguen</h3>
-          <div class="meta">
-            <span class="meta-item">📅 16/03/2026</span>
-            
-          </div>
-          <div class="cuerpo">El gobierno de Kast busca fortalecer los mecanismos de cobro del CAE como parte de su reconstrucción fiscal. El ministro Quiroz señaló que la deuda del CAE pasó de 500 mil millones en 2019 a cuatro billones de pesos actualmente, y hay personas de altos ingresos que no pagan su crédito.</div>
-          <div class="card-footer"><a href="https://www.emol.com/noticias/Nacional/2026/03/16/1194378/deudores-cae-revision-beneficios-kast.html" target="_blank" class="ver-nota">Ver nota original →</a></div>
+          <div class="cuerpo">Kast presentó Plan de Reconstrucción Nacional con 40 medidas en cinco ejes. Incluye rebaja gradual de impuesto corporativo del 27% al 23%, eliminación transitoria de IVA a viviendas y $400 mil millones adicionales al Fondo de Emergencia.</div>
+          <div class="card-footer"><a href="https://www.df.cl/economia-y-politica/pais/kast-anuncia-plan-de-reconstruccion-y-medidas-economicas-tras-incendios-en" target="_blank" class="ver-nota">Ver nota original →</a></div>
         </article>
   </section>
 </main>
 
-<footer>Monitor Noticias Chile — Generado el 17 de March de 2026 a las 10:24 hrs · Solo uso interno</footer>
+<footer>Monitor Noticias Chile — Generado el 17 de March de 2026 a las 10:37 hrs · Solo uso interno</footer>
 
 <script>
 function filtrar(medio, btn) {
