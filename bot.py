@@ -105,19 +105,24 @@ def generate_full_report() -> dict:
         model="claude-haiku-4-5-20251001",
         max_tokens=4000,
         system=PROMPT_FULL,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+        tools=[{
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 8,          # maximo 8 busquedas para no exceder tokens
+        }],
         messages=[{
             "role": "user",
             "content": (
                 f"Fecha actual: {now.strftime('%d/%m/%Y')} "
                 f"Hora: {now.strftime('%H:%M')} hrs (Santiago).\n\n"
-                "Busca todas las noticias de HOY sobre el gobierno de Kast.\n"
-                "1. Busca en medios: El Mercurio, La Tercera, Diario Financiero, "
-                "Emol, Cooperativa, Ex-Ante, El Libero, BioBioChile, El Mostrador, "
-                "Ciper Chile, Radio Agricultura, La Nacion, T13, CNN Chile, "
-                "Fast Check CL, Radio Biobio.\n"
-                "2. Busca OBLIGATORIAMENTE en X/Twitter: tweets de @ElMercurio_cl "
-                "y @lasegunda de hoy sobre Kast o el gobierno.\n"
+                "Busca noticias de HOY sobre el gobierno de Kast.\n"
+                "Haz MAXIMO 8 busquedas. Agrupa los medios en cada busqueda:\n"
+                "- Busqueda 1: noticias gobierno Kast Chile hoy\n"
+                "- Busqueda 2: El Mercurio La Tercera Kast hoy\n"
+                "- Busqueda 3: El Mostrador Ciper Kast gobierno hoy\n"
+                "- Busqueda 4: Emol Cooperativa T13 CNN Chile gobierno hoy\n"
+                "- Busqueda 5: tweets @ElMercurio_cl @lasegunda Kast hoy\n"
+                "- Busquedas 6-8: cualquier tema importante que no hayas cubierto.\n"
                 "Responde SOLO con el JSON. Sin ningun texto adicional."
             )
         }],
